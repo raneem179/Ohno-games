@@ -1,0 +1,1035 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>UNO Online • أونو أونلاين</title>
+
+<!--
+===========================================================
+UNO ONLINE — ملف HTML واحد
+===========================================================
+
+طريقة تشغيل اللعب أونلاين:
+1) أنشئي مشروع Firebase مجاني.
+2) فعّلي Authentication > Anonymous.
+3) أنشئي Realtime Database.
+4) ضعي بيانات Firebase داخل firebaseConfig أدناه.
+5) استضيفي هذا الملف على GitHub Pages / Netlify / Vercel.
+6) أرسلي رابط الغرفة الذي يظهر داخل اللعبة لأصدقائك.
+
+قواعد Realtime Database التجريبية المناسبة لهذا النموذج:
+{
+  "rules": {
+    ".read": "auth != null",
+    ".write": "auth != null"
+  }
+}
+
+ملاحظة: هذه القواعد مناسبة للتجربة وليست حماية احترافية للإنتاج.
+-->
+
+<style>
+:root{
+  --bg:#101426;
+  --panel:#171d34;
+  --panel2:#202846;
+  --text:#f7f8ff;
+  --muted:#aeb7d6;
+  --green:#35d07f;
+  --red:#ff4f5e;
+  --blue:#3d8bfd;
+  --yellow:#ffd43b;
+  --purple:#9b6cff;
+  --shadow:0 15px 40px rgba(0,0,0,.35);
+}
+*{box-sizing:border-box}
+body{
+  margin:0;
+  min-height:100vh;
+  font-family:system-ui,-apple-system,"Segoe UI",Tahoma,Arial,sans-serif;
+  background:
+    radial-gradient(circle at 15% 10%,rgba(61,139,253,.16),transparent 28%),
+    radial-gradient(circle at 85% 15%,rgba(155,108,255,.14),transparent 30%),
+    var(--bg);
+  color:var(--text);
+}
+button,input,select{font:inherit}
+button{cursor:pointer}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid #fff;outline-offset:3px}
+.hidden{display:none!important}
+.app{max-width:1250px;margin:auto;padding:18px}
+.topbar{
+  display:flex;gap:12px;align-items:center;justify-content:space-between;
+  margin-bottom:16px;flex-wrap:wrap
+}
+.logo{font-size:28px;font-weight:900;letter-spacing:.5px}
+.logo span{color:var(--yellow)}
+.badge{
+  padding:7px 12px;border-radius:999px;background:#252d4b;color:#dbe2ff;font-size:13px
+}
+.card{
+  background:linear-gradient(180deg,rgba(32,40,70,.96),rgba(23,29,52,.96));
+  border:1px solid rgba(255,255,255,.08);
+  border-radius:22px;padding:20px;box-shadow:var(--shadow)
+}
+.setup{
+  max-width:650px;margin:45px auto
+}
+h1,h2,h3{margin-top:0}
+label{display:block;color:var(--muted);font-size:14px;margin:12px 0 7px}
+input,select{
+  width:100%;padding:13px 14px;border-radius:13px;border:1px solid #3b466d;
+  background:#0f1426;color:white;outline:none
+}
+input:focus,select:focus{border-color:var(--blue)}
+.row{display:flex;gap:10px;flex-wrap:wrap}
+.row>*{flex:1}
+.btn{
+  border:0;border-radius:13px;padding:12px 16px;color:white;font-weight:800;
+  background:#354063;transition:.15s transform,.15s filter
+}
+.btn:hover{filter:brightness(1.12);transform:translateY(-1px)}
+.btn.primary{background:linear-gradient(135deg,#287cf5,#6554f5)}
+.btn.green{background:linear-gradient(135deg,#1ebd6a,#0b9862)}
+.btn.red{background:linear-gradient(135deg,#ff5364,#d9364b)}
+.btn.yellow{background:linear-gradient(135deg,#ffc928,#eaa500);color:#17120a}
+.btn.small{padding:8px 11px;font-size:13px}
+.help{color:var(--muted);font-size:13px;line-height:1.7}
+.roomCode{
+  background:#0d1221;border:1px dashed #56648e;border-radius:14px;padding:12px;
+  font-weight:900;letter-spacing:2px;text-align:center
+}
+.players{
+  display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin-top:14px
+}
+.player{
+  padding:13px;border-radius:16px;background:#11172a;border:1px solid #303a60;
+  display:flex;justify-content:space-between;align-items:center
+}
+.player.host{border-color:#9b6cff}
+.dot{width:10px;height:10px;border-radius:50%;background:var(--green);display:inline-block;margin-left:7px}
+.game{display:none}
+.game.active{display:block}
+.table{
+  min-height:640px;display:grid;grid-template-rows:auto 1fr auto;gap:12px
+}
+.opponents{
+  display:grid;grid-template-columns:repeat(4,1fr);gap:10px
+}
+.opponent{
+  background:rgba(17,23,42,.75);border:1px solid #303a60;border-radius:18px;
+  padding:12px;text-align:center;min-height:92px
+}
+.opponent.activeTurn{border-color:var(--yellow);box-shadow:0 0 0 2px rgba(255,212,59,.12)}
+.avatar{font-size:25px}
+.count{color:var(--muted);font-size:13px}
+.center{
+  display:flex;align-items:center;justify-content:center;gap:28px;flex-wrap:wrap;
+}
+.pile{
+  width:110px;height:160px;border-radius:14px;position:relative;display:flex;
+  align-items:center;justify-content:center;font-size:50px;font-weight:1000;
+  box-shadow:0 12px 25px rgba(0,0,0,.35);user-select:none
+}
+.deck{
+  background:repeating-linear-gradient(135deg,#141a2d 0 8px,#202a4a 8px 16px);
+  border:4px solid white;color:white;cursor:pointer
+}
+.deck::after{
+  content:"UNO";position:absolute;font-size:24px;transform:rotate(-15deg);
+  color:white;border:3px solid white;border-radius:40%;padding:4px 10px
+}
+.carduno{
+  border:4px solid white;color:white;text-shadow:0 2px 4px #000;overflow:hidden
+}
+.carduno .corner{position:absolute;font-size:18px}
+.carduno .tl{top:7px;left:9px}.carduno .br{bottom:7px;right:9px;transform:rotate(180deg)}
+.carduno .oval{
+  width:75px;height:105px;border-radius:50%;background:rgba(255,255,255,.9);
+  transform:rotate(-25deg);display:flex;align-items:center;justify-content:center;
+  color:#15192a;text-shadow:none;font-size:38px;font-weight:1000
+}
+.redcard{background:#ef3f4f}.bluecard{background:#2f80ed}
+.greencard{background:#20b86b}.yellowcard{background:#f4c51f}
+.wildcard{background:linear-gradient(135deg,#e94355 0 25%,#2f80ed 25% 50%,#20b86b 50% 75%,#f4c51f 75%)}
+.myarea{
+  background:rgba(10,14,27,.6);border:1px solid #303a60;border-radius:20px;padding:14px
+}
+.myheader{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.hand{
+  display:flex;overflow-x:auto;padding:12px 5px 8px;min-height:180px;
+  justify-content:center
+}
+.hand .gamecard{
+  flex:0 0 auto;margin-right:-8px;transition:.15s transform
+}
+.hand .gamecard:hover{transform:translateY(-13px);z-index:4}
+.gamecard .pile{width:82px;height:124px;font-size:35px;border-width:3px}
+.gamecard .oval{width:56px;height:82px;font-size:28px}
+.gamecard .corner{font-size:13px}
+.actions{display:flex;justify-content:center;gap:9px;flex-wrap:wrap}
+.status{
+  text-align:center;font-weight:800;color:#f3f6ff;min-height:28px;padding:7px
+}
+.turnme{color:var(--yellow)}
+.modal{
+  position:fixed;inset:0;background:rgba(3,5,12,.72);display:flex;align-items:center;
+  justify-content:center;padding:20px;z-index:50
+}
+.modalbox{max-width:420px;width:100%;background:#1b223b;border-radius:22px;padding:22px;box-shadow:var(--shadow)}
+.colors{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.colorbtn{height:65px;border:0;border-radius:15px;font-weight:900}
+.c-red{background:#ef3f4f}.c-blue{background:#2f80ed}.c-green{background:#20b86b}.c-yellow{background:#f4c51f;color:#17120a}
+.toast{
+  position:fixed;bottom:20px;left:50%;transform:translateX(-50%);
+  background:#0b1020;border:1px solid #46527c;padding:12px 18px;border-radius:999px;
+  z-index:80;opacity:0;pointer-events:none;transition:.2s
+}
+.toast.show{opacity:1}
+@media(max-width:850px){
+  .opponents{grid-template-columns:repeat(2,1fr)}
+  .table{min-height:0}
+  .pile{width:92px;height:138px}
+}
+@media(max-width:520px){
+  .app{padding:10px}.card{padding:14px}.logo{font-size:23px}
+  .opponents{grid-template-columns:repeat(2,1fr)}
+  .hand{justify-content:flex-start}
+  .center{gap:14px}
+}
+</style>
+</head>
+
+<body>
+<div class="app">
+  <div class="topbar">
+    <div class="logo">🃏 <span>UNO</span> Online</div>
+    <div class="row" style="flex:0 0 auto;align-items:center">
+      <button class="btn small" id="soundToggle" aria-pressed="true">🔊 الصوت: تشغيل</button>
+      <button class="btn small" id="readerToggle" aria-pressed="false">🔈 القارئ: إيقاف</button>
+      <div id="connectionBadge" class="badge">غير متصل</div>
+    </div>
+  </div>
+
+  <!-- شاشة الدخول -->
+  <section id="setupScreen" class="card setup">
+    <h1>🎮 لعبة أونو</h1>
+    <p class="help">
+      أنشئي غرفة خاصة، اختاري عدد اللاعبين الافتراضيين أو اتركي أماكن لأصدقائك،
+      ثم أرسلي رابط الغرفة. الحد الأقصى 5 لاعبين إجمالاً.
+    </p>
+
+    <label>اسمك</label>
+    <input id="nameInput" maxlength="18" placeholder="مثلاً: آسيا">
+
+    <label>رمز الغرفة</label>
+    <div class="row">
+      <input id="roomInput" maxlength="8" placeholder="اتركيه فارغاً لإنشاء غرفة">
+      <button class="btn" id="randomRoomBtn">🎲 رمز عشوائي</button>
+    </div>
+
+    <label>عدد اللاعبين الافتراضيين</label>
+    <select id="botCount">
+      <option value="0">بدون لاعبين افتراضيين</option>
+      <option value="1">1 لاعب افتراضي</option>
+      <option value="2">2 لاعبين افتراضيين</option>
+      <option value="3">3 لاعبين افتراضيين</option>
+      <option value="4">4 لاعبين افتراضيين</option>
+    </select>
+
+    <div class="row" style="margin-top:16px">
+      <button class="btn primary" id="createBtn">✨ إنشاء غرفة</button>
+      <button class="btn green" id="joinBtn">🚪 دخول غرفة</button>
+    </div>
+
+    <p class="help" style="margin-top:15px">
+      ملاحظة: اللعب مع الأصدقاء يحتاج إعداد Firebase الموجود في أعلى الملف.
+      أما إنشاء اللعبة وتجربتها محلياً فيمكنك ذلك بعد وضع إعدادات Firebase.
+    </p>
+  </section>
+
+  <!-- شاشة الغرفة -->
+  <section id="lobbyScreen" class="card setup hidden">
+    <h2>🏠 غرفة اللعب</h2>
+    <div class="roomCode" id="roomCodeLabel">----</div>
+    <p class="help" style="text-align:center">أرسلي رابط الغرفة لأصدقائك:</p>
+    <button class="btn primary" style="width:100%" id="copyLinkBtn">🔗 نسخ رابط الغرفة</button>
+
+    <h3 style="margin-top:20px">اللاعبون</h3>
+    <div id="lobbyPlayers" class="players"></div>
+
+    <div class="row" style="margin-top:15px">
+      <button class="btn green" id="startBtn">▶️ بدء اللعبة</button>
+      <button class="btn" id="leaveBtn">↩️ خروج</button>
+    </div>
+    <p id="lobbyStatus" class="help"></p>
+  </section>
+
+  <!-- شاشة اللعبة -->
+  <section id="gameScreen" class="game">
+    <div class="table">
+      <div id="opponents" class="opponents"></div>
+
+      <div>
+        <div class="status" id="gameStatus">جاري التحميل...</div>
+        <div class="center">
+          <div>
+            <div id="drawPile" class="pile deck" title="اسحب ورقة"></div>
+            <div class="help" style="text-align:center;margin-top:6px">سحب</div>
+          </div>
+          <div>
+            <div id="discardCard"></div>
+            <div class="help" style="text-align:center;margin-top:6px">الورقة الحالية</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="myarea">
+        <div class="myheader">
+          <strong id="myName">أنت</strong>
+          <div class="actions">
+            <button class="btn yellow small" id="unoBtn">🔥 UNO!</button>
+            <button class="btn small" id="sortBtn">ترتيب</button>
+            <button class="btn red small" id="exitGameBtn">خروج</button>
+          </div>
+        </div>
+        <div id="myHand" class="hand"></div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<div id="colorModal" class="modal hidden">
+  <div class="modalbox">
+    <h2>🎨 اختاري اللون</h2>
+    <p class="help">اختاري اللون الذي ستستمر به اللعبة.</p>
+    <div class="colors">
+      <button class="colorbtn c-red" data-color="red">أحمر</button>
+      <button class="colorbtn c-blue" data-color="blue">أزرق</button>
+      <button class="colorbtn c-green" data-color="green">أخضر</button>
+      <button class="colorbtn c-yellow" data-color="yellow">أصفر</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="toast"></div>
+<div id="srAnnouncer" aria-live="polite" aria-atomic="true" style="position:fixed;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0"></div>
+
+<!-- Firebase -->
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-database-compat.js"></script>
+
+<script>
+/* =========================================================
+   1) ضعي إعدادات Firebase هنا
+   ========================================================= */
+const firebaseConfig = {
+  apiKey: "PUT_YOUR_API_KEY_HERE",
+  authDomain: "PUT_YOUR_PROJECT.firebaseapp.com",
+  databaseURL: "https://PUT_YOUR_PROJECT-default-rtdb.firebaseio.com",
+  projectId: "PUT_YOUR_PROJECT",
+  storageBucket: "PUT_YOUR_PROJECT.firebasestorage.app",
+  messagingSenderId: "PUT_YOUR_SENDER_ID",
+  appId: "PUT_YOUR_APP_ID"
+};
+
+let firebaseReady = false;
+let auth = null;
+let db = null;
+try {
+  if (!firebaseConfig.apiKey.includes("PUT_YOUR")) {
+    firebase.initializeApp(firebaseConfig);
+    auth = firebase.auth();
+    db = firebase.database();
+    firebaseReady = true;
+  }
+} catch(e) {
+  console.error(e);
+}
+
+/* =========================================================
+   2) حالة اللعبة
+   ========================================================= */
+const $ = id => document.getElementById(id);
+const uidKey = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
+const COLORS = ["red","yellow","green","blue"];
+const COLOR_LABEL = {red:"أحمر",yellow:"أصفر",green:"أخضر",blue:"أزرق"};
+const SYMBOLS = {
+  skip:"⊘", reverse:"↻", draw2:"+2", wild:"★", wild4:"+4"
+};
+
+let me = {uid:null,name:"",room:"",host:false};
+let roomRef = null;
+let roomState = null;
+let selectedCardIndex = null;
+let lastRoomSnapshot = null;
+
+/* =========================================================
+   3) أدوات عامة
+   ========================================================= */
+function toast(msg){
+  $("toast").textContent = msg;
+  announce(msg);
+  $("toast").classList.add("show");
+  clearTimeout(window.__toast);
+  window.__toast = setTimeout(()=>$("toast").classList.remove("show"),2400);
+}
+function randomRoom(){
+  const chars="ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  let s="";
+  for(let i=0;i<6;i++) s+=chars[Math.floor(Math.random()*chars.length)];
+  return s;
+}
+function cleanName(n){
+  return (n||"").trim().replace(/[<>]/g,"").slice(0,18);
+}
+function roomURL(room){
+  return location.origin + location.pathname + "?room=" + encodeURIComponent(room);
+}
+function cardColor(c){ return c.color === "wild" ? "wildcard" : c.color+"card"; }
+function cardText(c){ return SYMBOLS[c.value] || c.value; }
+function makeCard(color,value){return {color,value,id:uidKey()};}
+
+function buildDeck(){
+  const deck=[];
+  COLORS.forEach(color=>{
+    deck.push(makeCard(color,"0"));
+    for(let n=1;n<=9;n++){deck.push(makeCard(color,String(n)));deck.push(makeCard(color,String(n)));}
+    ["skip","reverse","draw2"].forEach(v=>{
+      deck.push(makeCard(color,v));deck.push(makeCard(color,v));
+    });
+  });
+  for(let i=0;i<4;i++){deck.push(makeCard("wild","wild"));deck.push(makeCard("wild","wild4"));}
+  return shuffle(deck);
+}
+function shuffle(a){
+  const x=[...a];
+  for(let i=x.length-1;i>0;i--){
+    const j=Math.floor(Math.random()*(i+1)); [x[i],x[j]]=[x[j],x[i]];
+  }
+  return x;
+}
+function dealInitial(deck, count){
+  const hands=Array.from({length:count},()=>[]);
+  for(let r=0;r<7;r++) for(let i=0;i<count;i++) hands[i].push(deck.pop());
+  return hands;
+}
+function nextIndex(i,n,dir=1){
+  return (i+dir+n)%n;
+}
+function playersArray(state){
+  return Object.values(state.players||{}).sort((a,b)=>(a.order??0)-(b.order??0));
+}
+function currentPlayer(state){
+  return playersArray(state)[state.turn];
+}
+function playable(card,top,currentColor){
+  if(card.color==="wild") return true;
+  return card.color===currentColor || card.value===top.value;
+}
+function safeSet(obj,path,val){ return db.ref(path).set(val); }
+
+/* =========================================================
+   4) المؤثرات الصوتية + قارئ الشاشة
+   ========================================================= */
+let soundEnabled=localStorage.getItem("unoSound")!=="off";
+let readerEnabled=localStorage.getItem("unoReader")==="on";
+let audioCtx=null;
+
+function updateAccessibilityButtons(){
+  const s=$("soundToggle"),r=$("readerToggle");
+  if(!s||!r)return;
+  s.textContent=soundEnabled?"🔊 الصوت: تشغيل":"🔇 الصوت: إيقاف";
+  r.textContent=readerEnabled?"🗣️ القارئ: تشغيل":"🔈 القارئ: إيقاف";
+  s.setAttribute("aria-pressed",String(soundEnabled));
+  r.setAttribute("aria-pressed",String(readerEnabled));
+}
+function ensureAudio(){
+  if(!soundEnabled)return null;
+  try{
+    if(!audioCtx)audioCtx=new(window.AudioContext||window.webkitAudioContext)();
+    if(audioCtx.state==="suspended")audioCtx.resume();
+    return audioCtx;
+  }catch(e){return null}
+}
+function tone(freq,duration,type,volume,delay){
+  const ctx=ensureAudio();if(!ctx)return;
+  const now=ctx.currentTime+(delay||0);
+  const osc=ctx.createOscillator(),gain=ctx.createGain();
+  osc.type=type||"sine";osc.frequency.setValueAtTime(freq,now);
+  gain.gain.setValueAtTime(.0001,now);
+  gain.gain.exponentialRampToValueAtTime(volume||.03,now+.012);
+  gain.gain.exponentialRampToValueAtTime(.0001,now+duration);
+  osc.connect(gain);gain.connect(ctx.destination);
+  osc.start(now);osc.stop(now+duration+.03);
+}
+function playSound(name){
+  if(!soundEnabled)return;
+  if(name==="click")tone(520,.06,"sine",.025);
+  if(name==="draw"){tone(240,.08,"triangle",.03);tone(330,.09,"triangle",.025,.07);}
+  if(name==="play"){tone(420,.07,"square",.022);tone(620,.10,"square",.026,.07);}
+  if(name==="uno"){tone(660,.10,"sawtooth",.03);tone(880,.14,"sawtooth",.035,.10);tone(1100,.18,"sine",.04,.22);}
+  if(name==="win"){tone(523,.13,"sine",.035);tone(659,.13,"sine",.035,.13);tone(784,.20,"sine",.045,.26);tone(1047,.30,"sine",.05,.42);}
+  if(name==="error"){tone(180,.12,"square",.03);tone(120,.16,"square",.025,.12);}
+  if(name==="turn"){tone(740,.09,"sine",.03);tone(980,.12,"sine",.035,.10);}
+}
+function announce(text,force){
+  if(!readerEnabled&&!force)return;
+  const clean=String(text||"").replace(/<[^>]*>/g,"").trim();
+  if(!clean)return;
+  const el=$("srAnnouncer");
+  if(el){el.textContent="";setTimeout(()=>el.textContent=clean,25);}
+  if(readerEnabled&&"speechSynthesis"in window){
+    try{
+      speechSynthesis.cancel();
+      const u=new SpeechSynthesisUtterance(clean);
+      u.lang="ar";u.rate=.95;speechSynthesis.speak(u);
+    }catch(e){}
+  }
+}
+
+/* =========================================================
+   4) Firebase authentication
+   ========================================================= */
+async function signIn(){
+  if(!firebaseReady){
+    $("connectionBadge").textContent="⚠️ Firebase غير مُعد";
+    throw new Error("Firebase configuration missing");
+  }
+  $("connectionBadge").textContent="⏳ اتصال...";
+  const result = await auth.signInAnonymously();
+  me.uid = result.user.uid;
+  $("connectionBadge").textContent="🟢 متصل";
+}
+
+/* =========================================================
+   5) إنشاء / دخول غرفة
+   ========================================================= */
+async function createRoom(){
+  const name=cleanName($("nameInput").value);
+  if(!name){toast("اكتبي اسمك أولاً");return}
+  if(!firebaseReady){toast("ضعي إعدادات Firebase داخل الملف أولاً");return}
+  try{
+    await signIn();
+    const room=($("roomInput").value.trim().toUpperCase()) || randomRoom();
+    me={uid:auth.currentUser.uid,name,room,host:true};
+    const botCount=Math.min(4,Math.max(0,Number($("botCount").value)));
+    const players={};
+    players[me.uid]={uid:me.uid,name,host:true,bot:false,order:0,online:true,hand:[]};
+
+    const botNames=["ليان","سارة","نور","إياد"];
+    for(let i=0;i<botCount;i++){
+      const id="bot_"+uidKey();
+      players[id]={uid:id,name:botNames[i],host:false,bot:true,order:i+1,online:true,hand:[]};
+    }
+
+    await db.ref("rooms/"+room).set({
+      room,started:false,createdAt:firebase.database.ServerValue.TIMESTAMP,
+      host:me.uid,players,turn:0,direction:1,currentColor:null,
+      topCard:null,deck:[],discard:[],uno:null,message:"بانتظار اللاعبين..."
+    });
+    subscribeRoom(room);
+    showLobby();
+  }catch(e){console.error(e);toast("تعذر إنشاء الغرفة: "+e.message)}
+}
+
+async function joinRoom(){
+  const name=cleanName($("nameInput").value);
+  const room=($("roomInput").value.trim().toUpperCase());
+  if(!name){toast("اكتبي اسمك أولاً");return}
+  if(!room){toast("اكتبي رمز الغرفة");return}
+  if(!firebaseReady){toast("ضعي إعدادات Firebase داخل الملف أولاً");return}
+  try{
+    await signIn();
+    const snap=await db.ref("rooms/"+room).once("value");
+    if(!snap.exists()){toast("الغرفة غير موجودة");return}
+    const state=snap.val();
+    if(state.started){toast("اللعبة بدأت بالفعل");return}
+    const ps=playersArray(state);
+    if(ps.length>=5){toast("الغرفة ممتلئة");return}
+    const order=ps.length;
+    me={uid:auth.currentUser.uid,name,room,host:false};
+    await db.ref(`rooms/${room}/players/${me.uid}`).set({
+      uid:me.uid,name,host:false,bot:false,order,online:true,hand:[]
+    });
+    subscribeRoom(room);
+    showLobby();
+  }catch(e){console.error(e);toast("تعذر الدخول: "+e.message)}
+}
+
+function subscribeRoom(room){
+  if(roomRef) roomRef.off();
+  roomRef=db.ref("rooms/"+room);
+  roomRef.on("value",snap=>{
+    if(!snap.exists()){
+      toast("تم حذف الغرفة");
+      showSetup(); return;
+    }
+    roomState=snap.val();
+    renderAll();
+    if(roomState.started && $("gameScreen").classList.contains("active")===false){
+      showGame();
+    }
+    maybeBotTurn();
+  });
+}
+
+/* =========================================================
+   6) اللوبي
+   ========================================================= */
+function showSetup(){
+  $("setupScreen").classList.remove("hidden");
+  $("lobbyScreen").classList.add("hidden");
+  $("gameScreen").classList.remove("active");
+}
+function showLobby(){
+  $("setupScreen").classList.add("hidden");
+  $("lobbyScreen").classList.remove("hidden");
+  $("gameScreen").classList.remove("active");
+}
+function showGame(){
+  $("setupScreen").classList.add("hidden");
+  $("lobbyScreen").classList.add("hidden");
+  $("gameScreen").classList.add("active");
+}
+function renderLobby(){
+  if(!roomState)return;
+  $("roomCodeLabel").textContent=roomState.room;
+  const ps=playersArray(roomState);
+  $("lobbyPlayers").innerHTML=ps.map(p=>`
+    <div class="player ${p.host?'host':''}">
+      <span><span class="dot"></span>${escapeHTML(p.name)}</span>
+      <span>${p.host?"👑":p.bot?"🤖":"👤"}</span>
+    </div>`).join("");
+  $("startBtn").style.display = me.host ? "" : "none";
+  $("lobbyStatus").textContent =
+    ps.length<2 ? "يمكنك اللعب ضد لاعب افتراضي أو انتظار صديق. الحد الأدنى للعبة: لاعبان." :
+    "الغرفة جاهزة! عندما تكونون مستعدين اضغطي بدء اللعبة.";
+}
+function escapeHTML(s){
+  return String(s||"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]));
+}
+
+/* =========================================================
+   7) بدء اللعبة
+   ========================================================= */
+async function startGame(){
+  if(!me.host || !roomState)return;
+  const ps=playersArray(roomState);
+  if(ps.length<2){toast("أضيفي لاعباً واحداً على الأقل");return}
+
+  let deck=buildDeck();
+  const hands=dealInitial(deck,ps.length);
+  const players={};
+  ps.forEach((p,i)=>players[p.uid]={...p,order:i,hand:hands[i],online:p.bot?p.online:true});
+
+  let top=deck.pop();
+  while(top.color==="wild"){
+    deck.unshift(top);
+    deck=shuffle(deck);
+    top=deck.pop();
+  }
+
+  players[ps[0].uid].hand = hands[0];
+  await roomRef.update({
+    started:true,players,deck,discard:[top],topCard:top,currentColor:top.color,
+    turn:0,direction:1,uno:null,message:`دور ${ps[0].name}`
+  });
+}
+
+function renderGame(){
+  if(!roomState)return;
+  const ps=playersArray(roomState);
+  const my=roomState.players?.[me.uid];
+  if(!my)return;
+  $("myName").textContent="👤 "+my.name;
+  const turnP=currentPlayer(roomState);
+  $("gameStatus").innerHTML =
+    turnP?.uid===me.uid ? `<span class="turnme">⭐ دورك! اختاري ورقة مناسبة.</span>` :
+    `دور <b>${escapeHTML(turnP?.name||"—")}</b>`;
+
+  $("opponents").innerHTML=ps.filter(p=>p.uid!==me.uid).map(p=>`
+    <div class="opponent ${turnP?.uid===p.uid?'activeTurn':''}">
+      <div class="avatar">${p.bot?"🤖":"👤"}</div>
+      <b>${escapeHTML(p.name)}</b>
+      <div class="count">${(p.hand||[]).length} ورقة ${p.online===false?"• غير متصل":""}</div>
+    </div>`).join("");
+
+  const top=roomState.topCard;
+  $("discardCard").innerHTML=top?renderCard(top,false):"";
+  $("myHand").innerHTML=(my.hand||[]).map((c,i)=>renderCard(c,true,i)).join("");
+}
+
+function renderCard(c,clickable,index){
+  const cls=cardColor(c);
+  const label=`${clickable?"ورقة "+(index+1)+": ":""}${cardText(c)} ${c.color==="wild"?"متعددة الألوان":COLOR_LABEL[c.color]||""}`;
+  return `<div class="gamecard" ${clickable?`onclick="playCard(${index})" tabindex="0" role="button" aria-label="${escapeHTML(label)}" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();playCard(${index})}"`:""}>
+    <div class="pile carduno ${cls}" title="${clickable?"العب هذه الورقة":""}">
+      <span class="corner tl">${escapeHTML(cardText(c))}</span>
+      <span class="oval">${escapeHTML(cardText(c))}</span>
+      <span class="corner br">${escapeHTML(cardText(c))}</span>
+    </div>
+  </div>`;
+}
+
+/* =========================================================
+   8) سحب / لعب الأوراق
+   ========================================================= */
+async function drawCard(){
+  if(!roomState || currentPlayer(roomState)?.uid!==me.uid)return;
+  playSound("draw");
+  let deck=[...(roomState.deck||[])];
+  let discard=[...(roomState.discard||[])];
+  let players=clone(roomState.players);
+  const meP=players[me.uid];
+  if(deck.length===0){
+    const top=discard.pop();
+    deck=shuffle(discard);
+    discard=[top];
+  }
+  if(deck.length===0){toast("لا توجد أوراق للسحب");return}
+  const card=deck.pop();
+  meP.hand.push(card);
+
+  await roomRef.update({
+    deck,discard,players,
+    message:`${meP.name} سحب ورقة`
+  });
+}
+
+async function playCard(index){
+  if(!roomState || currentPlayer(roomState)?.uid!==me.uid)return;
+  const players=clone(roomState.players);
+  const ps=playersArray(roomState);
+  const p=players[me.uid];
+  const card=p.hand[index];
+  if(!card)return;
+
+  const top=roomState.topCard;
+  if(!playable(card,top,roomState.currentColor)){
+    playSound("error"); toast("❌ لا يمكنك لعب هذه الورقة الآن");
+    return;
+  }
+
+  if(card.value==="wild" || card.value==="wild4"){
+    selectedCardIndex=index;
+    $("colorModal").classList.remove("hidden");
+    return;
+  }
+  await executePlay(index,card.color);
+}
+
+async function chooseColor(color){
+  $("colorModal").classList.add("hidden");
+  if(selectedCardIndex===null)return;
+  const p=roomState.players[me.uid];
+  const card=p?.hand?.[selectedCardIndex];
+  if(!card)return;
+  await executePlay(selectedCardIndex,color);
+  selectedCardIndex=null;
+}
+
+async function executePlay(index,chosenColor){
+  if(!roomState || currentPlayer(roomState)?.uid!==me.uid)return;
+  playSound("play");
+  const ps=playersArray(roomState);
+  const players=clone(roomState.players);
+  const p=players[me.uid];
+  const card=p.hand[index];
+  if(!card)return;
+
+  p.hand.splice(index,1);
+  let discard=[...(roomState.discard||[]),card];
+  let deck=[...(roomState.deck||[])];
+  let direction=roomState.direction||1;
+  let turn=roomState.turn;
+  let currentColor=card.color==="wild"?chosenColor:card.color;
+  let extraDraw=0;
+
+  if(card.value==="reverse"){
+    if(ps.length===2){
+      // في أونو مع لاعبين: Reverse تعمل مثل Skip
+      turn=nextIndex(turn,ps.length,direction);
+    }else{
+      direction*=-1;
+    }
+  }
+  if(card.value==="skip"){
+    turn=nextIndex(turn,ps.length,direction);
+  }
+  if(card.value==="draw2"){
+    extraDraw=2;
+  }
+  if(card.value==="wild4"){
+    extraDraw=4;
+  }
+
+  turn=nextIndex(turn,ps.length,direction);
+
+  if(extraDraw){
+    const target=players[ps[turn].uid];
+    for(let i=0;i<extraDraw;i++){
+      if(deck.length===0 && discard.length>1){
+        const top=discard.pop();
+        deck=shuffle(discard);
+        discard=[top];
+      }
+      if(deck.length) target.hand.push(deck.pop());
+    }
+    // اللاعب الذي تلقى +2/+4 يخسر دوره
+    turn=nextIndex(turn,ps.length,direction);
+  }
+
+  const winner=Object.values(players).find(x=>(x.hand||[]).length===0);
+  if(winner){
+    await roomRef.update({
+      players,deck,discard,topCard:card,currentColor,
+      direction,turn,uno:null,message:`🏆 ${winner.name} فاز باللعبة!`
+    });
+    toast(`🏆 ${winner.name} فاز!`);
+    return;
+  }
+
+  await roomRef.update({
+    players,deck,discard,topCard:card,currentColor,
+    direction,turn,uno:null,message:`${p.name} لعب ${cardText(card)}`
+  });
+}
+
+/* =========================================================
+   9) UNO
+   ========================================================= */
+async function callUNO(){
+  if(!roomState)return;
+  playSound("uno");
+  const p=roomState.players?.[me.uid];
+  if(!p)return;
+  if((p.hand||[]).length===1){
+    await roomRef.update({uno:{uid:me.uid,name:p.name,at:Date.now()}});
+    toast("🔥 UNO!");
+  }else{
+    toast("زر UNO يستخدم عندما تصبح لديك ورقة واحدة.");
+  }
+}
+
+/* =========================================================
+   10) ذكاء اصطناعي بسيط للاعبين الافتراضيين
+   ========================================================= */
+let botBusy=false;
+async function maybeBotTurn(){
+  if(botBusy || !roomState || !roomState.started)return;
+  const p=currentPlayer(roomState);
+  if(!p || !p.bot)return;
+
+  botBusy=true;
+  setTimeout(async()=>{
+    try{
+      // إعادة القراءة لتجنب تنفيذ دور قديم
+      const snap=await roomRef.once("value");
+      const state=snap.val();
+      if(!state?.started){botBusy=false;return}
+      const bp=currentPlayer(state);
+      if(!bp?.bot){botBusy=false;return}
+
+      const hand=bp.hand||[];
+      const playableIndexes=hand.map((c,i)=>({c,i}))
+        .filter(x=>playable(x.c,state.topCard,state.currentColor));
+
+      if(playableIndexes.length){
+        // يفضل الأرقام أولاً، ثم الأوراق الخاصة
+        playableIndexes.sort((a,b)=>{
+          const score=c=>["wild4","draw2","skip","reverse","wild"].includes(c.value)?1:0;
+          return score(a.c)-score(b.c);
+        });
+        const pick=playableIndexes[0];
+        await botPlay(bp.uid,pick.i);
+      }else{
+        await botDraw(bp.uid);
+      }
+    }finally{
+      botBusy=false;
+    }
+  },900);
+}
+
+async function botDraw(uid){
+  const state=roomState;
+  if(!state)return;
+  const ps=playersArray(state);
+  const players=clone(state.players);
+  const p=players[uid];
+  let deck=[...(state.deck||[])],discard=[...(state.discard||[])];
+  if(deck.length===0 && discard.length>1){
+    const top=discard.pop();deck=shuffle(discard);discard=[top];
+  }
+  if(!deck.length)return;
+  const card=deck.pop();p.hand.push(card);
+  // إذا كانت الورقة المسحوبة قابلة للعب، يترك القرار للدور التالي هنا:
+  const can=playable(card,state.topCard,state.currentColor);
+  if(can){
+    await roomRef.update({players,deck,discard,message:`${p.name} سحب ورقة`});
+  }else{
+    let turn=nextIndex(state.turn,ps.length,state.direction||1);
+    await roomRef.update({players,deck,discard,turn,message:`${p.name} سحب ورقة`});
+  }
+}
+
+async function botPlay(uid,index){
+  const state=roomState;
+  const ps=playersArray(state);
+  const players=clone(state.players);
+  const p=players[uid];
+  const card=p.hand[index];
+  if(!card)return;
+
+  p.hand.splice(index,1);
+  let deck=[...(state.deck||[])],discard=[...(state.discard||[]),card];
+  let direction=state.direction||1;
+  let turn=state.turn;
+  let currentColor=card.color;
+  let extraDraw=0;
+
+  if(card.value==="reverse"){
+    if(ps.length===2) turn=nextIndex(turn,ps.length,direction);
+    else direction*=-1;
+  }
+  if(card.value==="skip") turn=nextIndex(turn,ps.length,direction);
+  if(card.value==="draw2")extraDraw=2;
+  if(card.value==="wild4")extraDraw=4;
+  if(card.color==="wild"){
+    const counts={red:0,blue:0,green:0,yellow:0};
+    p.hand.forEach(c=>{if(counts[c.color]!==undefined)counts[c.color]++});
+    currentColor=Object.keys(counts).sort((a,b)=>counts[b]-counts[a])[0];
+  }
+  turn=nextIndex(turn,ps.length,direction);
+
+  if(extraDraw){
+    const target=players[ps[turn].uid];
+    for(let i=0;i<extraDraw;i++){
+      if(!deck.length && discard.length>1){
+        const top=discard.pop();deck=shuffle(discard);discard=[top];
+      }
+      if(deck.length)target.hand.push(deck.pop());
+    }
+    turn=nextIndex(turn,ps.length,direction);
+  }
+
+  const winner=Object.values(players).find(x=>(x.hand||[]).length===0);
+  await roomRef.update({
+    players,deck,discard,topCard:card,currentColor,direction,turn,
+    uno:(p.hand.length===1?{uid:p.uid,name:p.name,at:Date.now()}:null),
+    message:winner?`🏆 ${winner.name} فاز!`:`${p.name} لعب ${cardText(card)}`
+  });
+}
+
+/* =========================================================
+   11) ترتيب الأوراق
+   ========================================================= */
+function sortHand(){
+  if(!roomState)return;
+  const p=roomState.players?.[me.uid];
+  if(!p)return;
+  const order={red:1,yellow:2,green:3,blue:4,wild:5};
+  const valueOrder={"0":0,"1":1,"2":2,"3":3,"4":4,"5":5,"6":6,"7":7,"8":8,"9":9,skip:10,reverse:11,draw2:12,wild:13,wild4:14};
+  const players=clone(roomState.players);
+  players[me.uid].hand.sort((a,b)=>(order[a.color]-order[b.color])||(valueOrder[a.value]-valueOrder[b.value]));
+  roomRef.update({players});
+}
+
+/* =========================================================
+   12) مغادرة / حذف الغرفة
+   ========================================================= */
+async function leaveRoom(){
+  if(!roomRef)return;
+  try{
+    const state=roomState;
+    if(state && me.uid && state.players?.[me.uid]){
+      if(me.host){
+        // إذا كان هناك لاعب آخر، ننقل الاستضافة
+        const ps=playersArray(state).filter(p=>p.uid!==me.uid);
+        if(ps.length){
+          const next=ps[0];
+          const players=clone(state.players);
+          delete players[me.uid];
+          players[next.uid].host=true;
+          await roomRef.update({host:next.uid,players});
+        }else{
+          await roomRef.remove();
+        }
+      }else{
+        await db.ref(`rooms/${me.room}/players/${me.uid}`).remove();
+      }
+    }
+  }catch(e){console.error(e)}
+  if(roomRef){roomRef.off();roomRef=null}
+  me={uid:null,name:"",room:"",host:false};
+  roomState=null;
+  showSetup();
+}
+function clone(o){return JSON.parse(JSON.stringify(o||{}))}
+
+/* =========================================================
+   13) ربط الواجهة
+   ========================================================= */
+function renderAll(){
+  if(!roomState)return;
+  if(roomState.started){
+    showGame();renderGame();
+  }else{
+    showLobby();renderLobby();
+  }
+}
+$("randomRoomBtn").onclick=()=>{$("roomInput").value=randomRoom()};
+$("createBtn").onclick=createRoom;
+$("joinBtn").onclick=joinRoom;
+$("startBtn").onclick=startGame;
+$("copyLinkBtn").onclick=async()=>{
+  const url=roomURL(me.room);
+  try{await navigator.clipboard.writeText(url);toast("🔗 تم نسخ رابط الغرفة");}
+  catch(e){prompt("انسخي رابط الغرفة:",url)}
+};
+$("leaveBtn").onclick=leaveRoom;
+$("exitGameBtn").onclick=leaveRoom;
+$("drawPile").onclick=drawCard;
+$("drawPile").setAttribute("role","button");
+$("drawPile").setAttribute("tabindex","0");
+$("drawPile").setAttribute("aria-label","سحب ورقة من الرزمة");
+$("drawPile").onkeydown=(e)=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();drawCard();}};
+$("unoBtn").onclick=callUNO;
+$("sortBtn").onclick=sortHand;
+$("soundToggle").onclick=()=>{
+  soundEnabled=!soundEnabled;
+  localStorage.setItem("unoSound",soundEnabled?"on":"off");
+  updateAccessibilityButtons();
+  if(soundEnabled)playSound("click");
+};
+$("readerToggle").onclick=()=>{
+  readerEnabled=!readerEnabled;
+  localStorage.setItem("unoReader",readerEnabled?"on":"off");
+  updateAccessibilityButtons();
+  announce(readerEnabled?"تم تشغيل قارئ الشاشة المدمج.":"تم إيقاف قارئ الشاشة المدمج.",true);
+};
+updateAccessibilityButtons();
+document.querySelectorAll(".colorbtn").forEach(b=>b.onclick=()=>chooseColor(b.dataset.color));
+
+window.playCard=playCard;
+
+/* =========================================================
+   14) رابط الغرفة من URL
+   ========================================================= */
+(function initFromURL(){
+  const params=new URLSearchParams(location.search);
+  const room=params.get("room");
+  if(room){
+    $("roomInput").value=room.toUpperCase();
+    $("joinBtn").style.boxShadow="0 0 0 3px rgba(53,208,127,.2)";
+  }
+  if(!firebaseReady){
+    $("connectionBadge").textContent="⚠️ أضيفي Firebase";
+  }
+})();
+</script>
+</body>
+</html>
