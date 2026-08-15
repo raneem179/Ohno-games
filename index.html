@@ -220,11 +220,20 @@ input.text{
 const COLORS = ['red','yellow','green','blue'];
 const COLOR_NAMES = {red:'أحمر', yellow:'أصفر', green:'أخضر', blue:'أزرق'};
 const SYMBOLS = {skip:'⛔', reverse:'🔁', draw2:'+2', wild:'★', wild4:'+4'};
-const AI_NAME_POOL = ['عمر','آسيا','خيال','جوري','لين','ياسمين','سلطان','نوف','فراس','ريما','عبدالله','دانة','سامي','لمى','طلال','هيا'];
-function pickAINames(count){
-  const pool = shuffle(AI_NAME_POOL.slice());
-  return pool.slice(0, count);
-}
+const AI_ROSTER = [
+  {name:'عمر', avatar:'🧑'},
+  {name:'آسيا', avatar:'👩'},
+  {name:'خيال', avatar:'🧑‍🎨'},
+  {name:'جوري', avatar:'👩‍🦱'},
+  {name:'لين', avatar:'👧'},
+  {name:'ياسمين', avatar:'👩‍🦳'},
+  {name:'سلطان', avatar:'🧔'},
+  {name:'نوف', avatar:'👩‍🦰'},
+  {name:'فراس', avatar:'👨‍🦱'},
+  {name:'ريما', avatar:'👩‍🦲'},
+  {name:'عبدالله', avatar:'👴'},
+  {name:'دانة', avatar:'👩‍🎤'},
+];
 
 let audioCtx = null;
 function ensureAudio(){ if(!audioCtx){ audioCtx = new (window.AudioContext||window.webkitAudioContext)(); } return audioCtx; }
@@ -236,7 +245,7 @@ const State = {
   narrateOn:false,
   playerName:'أنت',
   mode:null,               // 'ai' | 'room'
-  aiCount:1,
+  selectedAI:['عمر'],       // names chosen from AI_ROSTER to play against
   game:null,               // local game object
   room:null,               // {code, myId, isHost, players[]}
   roomPoll:null,
@@ -352,20 +361,18 @@ function describeCard(card){
 }
 
 /* ---------- local (vs AI) game engine ---------- */
-function newLocalGame(aiCount, playerName){
-  const n = aiCount+1;
+function newLocalGame(aiNames, playerName){
   const deck = shuffle(buildDeck());
   const players = [];
   players.push({id:'p0', name:playerName||'أنت', isAI:false, hand:[]});
-  const aiNames = pickAINames(aiCount);
-  for(let i=1;i<=aiCount;i++) players.push({id:'ai'+i, name:aiNames[i-1]||('لاعب افتراضي '+i), isAI:true, hand:[]});
+  aiNames.forEach((name,i)=> players.push({id:'ai'+i, name, isAI:true, hand:[]}));
   for(let r=0;r<7;r++) players.forEach(p=>p.hand.push(deck.pop()));
   let top = deck.pop();
   while(top.type==='wild4'){ deck.unshift(top); top = deck.pop(); }
   const chosenColor = top.color || COLORS[Math.floor(Math.random()*4)];
   return {
     players, deck, discard:[top], currentIndex:0, direction:1,
-    chosenColor, winner:null, log:[], pendingUnoWarn:null,
+    chosenColor, winner:null, log:[], pendingUnoWarn:null, drawnThisTurn:false,
   };
 }
 function topCard(g){ return g.discard[g.discard.length-1]; }
@@ -373,6 +380,10 @@ function playerCount(g){ return g.players.length; }
 function nextIndex(g, from, step=1){
   const n = playerCount(g);
   return ((from + g.direction*step) % n + n) % n;
+}
+function advanceTurn(g, fromIdx, step=1){
+  g.currentIndex = nextIndex(g, fromIdx, step);
+  g.drawnThisTurn = false;
 }
 function canPlay(g, card){
   const top = topCard(g);
@@ -419,7 +430,7 @@ function applyPlay(g, playerIdx, card, chosenColor){
     g.players[victimIdx].hand.push(...drawFromDeck(g,4));
     advance = 2;
   }
-  g.currentIndex = nextIndex(g, playerIdx, advance);
+  advanceTurn(g, playerIdx, advance);
 }
 
 function aiChoosePlay(g, playerIdx){
@@ -452,10 +463,12 @@ function myLocalId(){
   return id;
 }
 async function roomGet(code){
+  if(!window.storage) return null;
   try{ const r = await window.storage.get(roomKey(code), true); return r? JSON.parse(r.value): null; }
   catch(e){ return null; }
 }
 async function roomSet(code, obj){
+  if(!window.storage) throw new Error('storage-unavailable');
   obj.updatedAt = Date.now();
   await window.storage.set(roomKey(code), JSON.stringify(obj), true);
 }
@@ -489,7 +502,7 @@ function initGameStateForRoom(players){
   let top = deck.pop();
   while(top.type==='wild4'){ deck.unshift(top); top = deck.pop(); }
   const chosenColor = top.color || COLORS[Math.floor(Math.random()*4)];
-  return { players:gp, deck, discard:[top], currentIndex:0, direction:1, chosenColor, winner:null };
+  return { players:gp, deck, discard:[top], currentIndex:0, direction:1, chosenColor, winner:null, drawnThisTurn:false };
 }
 
 /* =========================================================
@@ -537,16 +550,24 @@ function renderMenu(){
 
   // vs AI panel
   const aiPanel = el('div',{class:'panel'});
-  aiPanel.appendChild(el('h2',{},['🤖 العب ضد لاعبين افتراضيين']));
-  aiPanel.appendChild(el('p',{class:'sub'},['اختر عدد الخصوم الافتراضيين ثم ابدأ اللعب فورًا']));
-  const grid = el('div',{class:'opp-grid', role:'radiogroup', 'aria-label':'عدد الخصوم الافتراضيين'});
-  [1,2,3,4].forEach(count=>{
-    const label = count===1? 'خصم واحد' : count+' خصوم';
-    grid.appendChild(el('button',{class:'opp-opt', role:'radio', 'aria-checked':String(State.aiCount===count), 'aria-pressed':String(State.aiCount===count),
-      onclick:()=>{ State.aiCount=count; SFX.click(); draw(); }},[label, el('div',{style:'font-size:11px;font-weight:600;opacity:.8;margin-top:2px'},[`(${count+1} لاعبين إجمالًا)`])]));
+  aiPanel.appendChild(el('h2',{},['🤖 اختر من تريد أن تلعب ضدهم']));
+  aiPanel.appendChild(el('p',{class:'sub'},[`اختر من ١ إلى ٤ لاعبين افتراضيين (${State.selectedAI.length} مُختارون الآن)`]));
+  const grid = el('div',{class:'opp-grid', role:'group', 'aria-label':'اللاعبون الافتراضيون'});
+  AI_ROSTER.forEach(person=>{
+    const selected = State.selectedAI.includes(person.name);
+    grid.appendChild(el('button',{class:'opp-opt', 'aria-pressed':String(selected),
+      onclick:()=>{
+        if(selected){ State.selectedAI = State.selectedAI.filter(n=>n!==person.name); }
+        else{
+          if(State.selectedAI.length>=4){ SFX.invalid(); announce('يمكنك اختيار ٤ لاعبين كحد أقصى'); return; }
+          State.selectedAI = [...State.selectedAI, person.name];
+        }
+        SFX.click(); draw();
+      }},[person.avatar+' '+person.name]));
   });
   aiPanel.appendChild(grid);
-  aiPanel.appendChild(el('button',{class:'btn btn-primary', onclick:startAIGame},['ابدأ اللعب ▶']));
+  aiPanel.appendChild(el('button',{class:'btn btn-primary', disabled: State.selectedAI.length? undefined:true, onclick:startAIGame},
+    [State.selectedAI.length? `ابدأ اللعب مع ${State.selectedAI.length} لاعبين ▶` : 'اختر لاعبًا واحدًا على الأقل']));
   wrap.appendChild(aiPanel);
 
   wrap.appendChild(el('div',{class:'divider'},['أو العب مع أصدقاء']));
@@ -554,11 +575,14 @@ function renderMenu(){
   // room panel
   const roomPanel = el('div',{class:'panel'});
   roomPanel.appendChild(el('h2',{},['👥 غرفة خاصة']));
-  roomPanel.appendChild(el('p',{class:'sub'},['أنشئ غرفة وشارك الرمز مع أصدقائك، أو انضم برمز غرفة موجودة (٢-٤ لاعبين)']));
+  roomPanel.appendChild(el('p',{class:'sub'},['أنشئ غرفة وشارك رمزها مع صديقك، وعندما يدخل بنفس الرمز من جهازه ستلعبان معًا فعليًا بالتناوب (٢-٤ لاعبين)']));
   roomPanel.appendChild(el('button',{class:'btn btn-outline', onclick:async ()=>{
     SFX.click();
-    const code = await createRoom(State.playerName||'أنت');
-    State.mode='room'; State.screen='lobby'; startPolling(); draw();
+    if(!window.storage){ alert('ميزة الغرف تحتاج دعم التخزين في هذه الواجهة، جرّب فتح اللعبة كملف Artifact كامل.'); return; }
+    try{
+      const code = await createRoom(State.playerName||'أنت');
+      State.mode='room'; State.screen='lobby'; startPolling(); draw();
+    }catch(e){ alert('تعذر إنشاء الغرفة، حاول مجددًا.'); }
   }},['أنشئ غرفتك 🎉']));
 
   const joinRow = el('div',{class:'row', style:'margin-top:12px'});
@@ -579,14 +603,15 @@ function renderMenu(){
   roomPanel.appendChild(joinRow);
   wrap.appendChild(roomPanel);
 
-  wrap.appendChild(el('p',{class:'footer-note'},['ملاحظة: لعب الغرفة يعمل بين من يفتحون نفس رابط هذه اللعبة، عبر مزامنة دورية كل ثانيتين.']));
+  wrap.appendChild(el('p',{class:'footer-note'},['ملاحظة: تعمل الغرفة فعليًا بين أشخاص حقيقيين يفتحون هذه اللعبة بنفسها (نفس هذه الصفحة/الرابط) على أجهزتهم، عبر مزامنة كل ١.٥ ثانية — وليست لاعبين افتراضيين.']));
   return wrap;
 }
 
 function startAIGame(){
+  if(!State.selectedAI.length) return;
   SFX.click();
   State.mode='ai';
-  State.game = newLocalGame(State.aiCount, State.playerName||'أنت');
+  State.game = newLocalGame(State.selectedAI, State.playerName||'أنت');
   State.screen='game';
   draw();
   announce(`بدأت اللعبة. أول بطاقة هي ${describeCard(topCard(State.game))}`);
@@ -628,8 +653,12 @@ function renderLobby(){
   const wrap = el('div',{class:'menu'});
   wrap.appendChild(el('div',{class:'panel'},[
     el('h2',{},['رمز الغرفة']),
-    el('p',{class:'sub'},['شارك هذا الرمز مع أصدقائك ليدخلوا من نفس الشاشة']),
+    el('p',{class:'sub'},['شارك هذا الرمز مع صديقك (عبر رسالة أو مكالمة) ليكتبه في خانة "انضم إلى غرفة"']),
     el('div',{class:'lobby-code'},[State.room.code]),
+    el('button',{class:'btn btn-ghost', style:'margin-top:12px', onclick:async ()=>{
+      try{ await navigator.clipboard.writeText(State.room.code); announce('تم نسخ رمز الغرفة'); }
+      catch(e){ announce('تعذر النسخ، انسخ الرمز يدويًا'); }
+    }},['نسخ الرمز 📋']),
   ]));
   const listPanel = el('div',{class:'panel'});
   listPanel.appendChild(el('h2',{},[`اللاعبون (${room.players.length}/4)`]));
@@ -650,6 +679,10 @@ function renderLobby(){
         const gs = initGameStateForRoom(room.players);
         room.started = true; room.state = gs;
         await roomSet(State.room.code, room);
+        State._roomCache = room;
+        State.game = gs;
+        State.screen = 'game';
+        draw();
       }},[canStart? 'ابدأ اللعبة 🚀' : 'بانتظار لاعب آخر...']));
   } else {
     listPanel.appendChild(el('p',{class:'sub', style:'text-align:center;margin-top:10px'},['بانتظار المضيف لبدء اللعبة...']));
@@ -690,12 +723,17 @@ function renderGame(){
   });
   felt.appendChild(oppRow);
 
+  const myTurnNow = isMyTurn(g) && !g.winner;
+  const awaitingDrawDecision = myTurnNow && g.drawnThisTurn;
   felt.appendChild(el('div',{class:'turn-banner'},[
-    g.winner ? `🎉 فاز ${g.winner.name}!` : (isMyTurn(g)? 'دورك — اختر بطاقة أو اسحب' : `دور ${g.players[g.currentIndex].name}...`)
+    g.winner ? `🎉 فاز ${g.winner.name}!`
+      : awaitingDrawDecision ? 'العب البطاقة التي سحبتها إن أردت، أو مرر الدور'
+      : myTurnNow ? 'دورك — اختر بطاقة أو اسحب'
+      : `دور ${g.players[g.currentIndex].name}...`
   ]));
 
   const center = el('div',{class:'center-area'});
-  const canDraw = isMyTurn(g) && !g.winner;
+  const canDraw = myTurnNow && !g.drawnThisTurn;
   center.appendChild(el('div',{class:'pile'},[
     el('div',{class:'pile-label'},['اسحب']),
     el('button',{class:'draw-pile', disabled: canDraw?undefined:true, 'aria-label':'اسحب بطاقة من الكومة', onclick:onDrawClick},[`🂠 ${g.deck?g.deck.length:0}`])
@@ -704,6 +742,12 @@ function renderGame(){
     el('div',{class:'pile-label'},['البطاقة الحالية']),
     el('div',{class:'discard-slot'},[renderCard(topCard(g), {chosenColor:g.chosenColor})])
   ]));
+  if(awaitingDrawDecision){
+    center.appendChild(el('div',{class:'pile'},[
+      el('div',{class:'pile-label'},['\u00a0']),
+      el('button',{class:'btn btn-ghost', style:'width:auto;padding:14px 18px', onclick:onPassClick, 'aria-label':'تمرير الدور بعد السحب'},['مرر الدور ⏭'])
+    ]));
+  }
   felt.appendChild(center);
 
   // hand
@@ -715,7 +759,7 @@ function renderGame(){
   const handEl = el('div',{class:'hand', role:'group', 'aria-label':'بطاقاتك'});
   if(me){
     me.hand.forEach(card=>{
-      const playable = isMyTurn(g) && !g.winner && canPlay(g,card);
+      const playable = myTurnNow && canPlay(g,card);
       handEl.appendChild(renderCard(card, {
         onClick: ()=>onCardClick(card),
         disabled: !playable,
@@ -779,12 +823,28 @@ function commitPlay(card, chosenColor){
 function onDrawClick(){
   const g = State.game;
   const myIdx = myPlayerIndex(g);
-  if(!isMyTurn(g) || g.winner) return;
+  if(!isMyTurn(g) || g.winner || g.drawnThisTurn) return;
   SFX.draw();
   const drawn = drawFromDeck(g,1);
   g.players[myIdx].hand.push(...drawn);
-  announce('سحبت بطاقة');
-  g.currentIndex = nextIndex(g, myIdx, 1);
+  const playable = drawn[0] && canPlay(g, drawn[0]);
+  g.drawnThisTurn = true;
+  if(playable){
+    announce(`سحبت ${describeCard(drawn[0])}. يمكنك لعبها الآن أو تمرير الدور`);
+  } else {
+    announce('سحبت بطاقة، لا يمكن لعبها الآن. تم تمرير الدور');
+    advanceTurn(g, myIdx, 1);
+  }
+  afterMove();
+}
+
+function onPassClick(){
+  const g = State.game;
+  const myIdx = myPlayerIndex(g);
+  if(!isMyTurn(g) || g.winner || !g.drawnThisTurn) return;
+  SFX.click();
+  announce('تم تمرير الدور');
+  advanceTurn(g, myIdx, 1);
   afterMove();
 }
 
@@ -834,7 +894,7 @@ function maybeRunAITurn(){
         applyPlay(g, idx, drawn[0], color);
         played = true;
       } else {
-        g.currentIndex = nextIndex(g, idx, 1);
+        advanceTurn(g, idx, 1);
       }
       if(g.winner){ SFX.win(); announce(`${p.name} فاز باللعبة`, {force:true}); }
       else announce(`${p.name} سحب بطاقة` + (played? ' ولعبها':' ومرر الدور'));
