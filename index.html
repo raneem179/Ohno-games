@@ -210,6 +210,7 @@ input.text{
 </head>
 <body>
 <div id="app"></div>
+<div id="live" class="sr-only" role="status" aria-live="polite"></div>
 <script>
 /* =========================================================
    أونو — محرك اللعبة الكامل
@@ -240,6 +241,7 @@ function ensureAudio(){ if(!audioCtx){ audioCtx = new (window.AudioContext||wind
 const State = {
   screen:'menu',           // menu | lobby | game
   soundOn:true,
+  narrateOn:false,
   playerName:'أنت',
   mode:null,               // 'ai' | 'room'
   selectedAI:['عمر'],       // names chosen from AI_ROSTER to play against
@@ -266,10 +268,13 @@ function el(tag, attrs={}, children=[]){
   return e;
 }
 
-function announce(text, {force=false}={}){
+function announce(text, {force=false, skip=false}={}){
+  if(skip) return; // لحظات مثل الفوز أو "أونو" لا تُقرأ صوتيًا، فهي واضحة بصريًا أصلًا
   const live = document.getElementById('live');
-  live.textContent = '';
-  requestAnimationFrame(()=>{ live.textContent = text; });
+  if(live){
+    live.textContent = '';
+    requestAnimationFrame(()=>{ live.textContent = text; });
+  }
   if((State.narrateOn||force) && 'speechSynthesis' in window){
     window.speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(text);
@@ -809,9 +814,9 @@ function commitPlay(card, chosenColor){
   const txt = describeCard(card);
   if(g.winner){
     SFX.win();
-    announce(`لعبت ${txt}. لقد فزت! 🎉`, {force:true});
+    announce(`لعبت ${txt}. لقد فزت! 🎉`, {skip:true});
   } else {
-    if(g.players[myIdx].hand.length===1){ SFX.uno(); announce(`لعبت ${txt}. أونو! بقيت بطاقة واحدة`, {force:true}); }
+    if(g.players[myIdx].hand.length===1){ SFX.uno(); announce(`لعبت ${txt}. أونو! بقيت بطاقة واحدة`, {skip:true}); }
     else announce(`لعبت ${txt}`);
   }
   afterMove();
