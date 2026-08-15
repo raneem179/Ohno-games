@@ -210,8 +210,6 @@ input.text{
 </head>
 <body>
 <div id="app"></div>
-<div id="live" class="sr-only" role="status" aria-live="polite"></div>
-
 <script>
 /* =========================================================
    أونو — محرك اللعبة الكامل
@@ -242,7 +240,6 @@ function ensureAudio(){ if(!audioCtx){ audioCtx = new (window.AudioContext||wind
 const State = {
   screen:'menu',           // menu | lobby | game
   soundOn:true,
-  narrateOn:false,
   playerName:'أنت',
   mode:null,               // 'ai' | 'room'
   selectedAI:['عمر'],       // names chosen from AI_ROSTER to play against
